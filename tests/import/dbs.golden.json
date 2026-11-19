@@ -1,0 +1,62 @@
+{
+  "bank": "DBS",
+  "batchId": "122ae549f92804e719ee35050279f1f43f683c2d83618ebb81e08da4f96a4ef8",
+  "fileName": "demo.csv",
+  "rows": [
+    {
+      "fileLine": 17,
+      "valueDate": "2026-11-17",
+      "amount": 46160,
+      "rawRef": "ABC CAT 104",
+      "payerName": "ABC CATERING PTE LTD",
+      "bankTxnId": null,
+      "reviewFlags": []
+    },
+    {
+      "fileLine": 18,
+      "valueDate": "2026-11-17",
+      "amount": 50000,
+      "rawRef": "AH SENG",
+      "payerName": "AH SENG EATING HSE",
+      "bankTxnId": null,
+      "reviewFlags": []
+    },
+    {
+      "fileLine": 19,
+      "valueDate": "2026-11-17",
+      "amount": 80000,
+      "rawRef": "TAN BK 41/42",
+      "payerName": "TAN BK CAFE",
+      "bankTxnId": null,
+      "reviewFlags": []
+    },
+    {
+      "fileLine": 20,
+      "valueDate": "2026-11-17",
+      "amount": 50000,
+      "rawRef": "",
+      "payerName": "OTHR TRF",
+      "bankTxnId": null,
+      "reviewFlags": []
+    },
+    {
+      "fileLine": 21,
+      "valueDate": "2026-11-17",
+      "amount": 18000,
+      "rawRef": "INV-110",
+      "payerName": "AH SENG EATING HSE",
+      "bankTxnId": null,
+      "reviewFlags": []
+    },
+    {
+      "fileLine": 22,
+      "valueDate": "2026-11-17",
+      "amount": 7500,
+      "rawRef": "MISC 9931",
+      "payerName": "OTHR TRF",
+      "bankTxnId": null,
+      "reviewFlags": []
+    }
+  ],
+  "skippedDebits": 0
+}

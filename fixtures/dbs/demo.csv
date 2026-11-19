@@ -1,0 +1,22 @@
+DBS Bank Ltd
+Account statement
+Kim Hock Dry Goods Pte Ltd
+SGD
+Period
+From 01 Nov 2026
+To 17 Nov 2026
+Opening balance
+Closing balance
+Available balance
+Notes
+This file is fictional
+No real customer
+Prepared for Tally
+End of preamble
+Transaction Date,Value Date,Statement Code,Reference 1,Reference 2,Reference 3,Client Reference,Debit,Credit,Payer
+17 Nov 2026,17 Nov 2026,TRF,ABC CAT 104,,,,,461.60,ABC CATERING PTE LTD
+17 Nov 2026,17 Nov 2026,TRF,AH SENG,,,,,500.00,AH SENG EATING HSE
+17 Nov 2026,17 Nov 2026,TRF,TAN BK,41/42,,,,800.00,TAN BK CAFE
+17 Nov 2026,17 Nov 2026,TRF,,,,,,500.00,OTHR TRF
+17 Nov 2026,17 Nov 2026,TRF,INV-110,,,,,180.00,AH SENG EATING HSE
+17 Nov 2026,17 Nov 2026,TRF,MISC,9931,,,,75.00,OTHR TRF

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 33 32" role="img" aria-label="Tally favicon">
+  <rect width="33" height="32" fill="#0E2859" />
+
+  <circle cx="16.5" cy="16" r="14" fill="none" stroke="#FFFFFF" stroke-width="1.1"/>
+  <path d="M9.5 5.9 C6.2 8.2 4.9 11.8 4.9 16 C4.9 22.5 10.1 27.5 16.5 27.5 C23 27.5 28.05 22.35 28.05 16" fill="none" stroke="#FFFFFF" stroke-width="1.15" stroke-linecap="round"/>
+  <path d="M24.8 11.9 C23.2 8.5 20.0 6.8 16.35 6.8 C11.2 6.8 7.0 11.05 7.0 16.1 C7.0 20.4 9.5 23.65 13.2 25.1" fill="none" stroke="#FFFFFF" stroke-width="1.15" stroke-linecap="round"/>
+  <path d="M12.7 11.9 H20.3 V13.15 H17.12 V21.12 H15.88 V13.15 H12.7 Z" fill="#FFFFFF"/>
+
+</svg>

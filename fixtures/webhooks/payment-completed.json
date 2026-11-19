@@ -1,0 +1,7 @@
+{
+  "event_type": "payment_request.completed",
+  "payment_request_id": "pr_fixture",
+  "reference_number": "TALLY-INV-104-1",
+  "amount": "38.40",
+  "status": "completed"
+}
