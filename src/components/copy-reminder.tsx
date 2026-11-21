@@ -26,7 +26,7 @@ export function CopyReminder({ url }: { url: string }) {
           ) : (
             <CopyIcon className="size-4" />
           )}
-          Copy reminder
+          Copy payment link
         </Button>
         <a
           href={url}

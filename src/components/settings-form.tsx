@@ -23,8 +23,8 @@ function moneyLabel(value: string) {
 }
 function ageLabel(value: number | null) {
   return value === null
-    ? "No minimum age"
-    : `Older than ${value} calendar days`;
+    ? "No grace period"
+    : `${value} grace days after due date`;
 }
 export function SettingsForm({
   initial,
@@ -118,8 +118,8 @@ export function SettingsForm({
           </p>
           <p className="mt-1 leading-6 text-muted-foreground">
             {editable
-              ? "Unauthenticated editing is enabled only on this computer’s loopback development server. Authentication is required before real-world use."
-              : "Policy values are visible, but writes require the explicit loopback development launcher. Production and network writes are disabled."}
+              ? "Policy editing is enabled for this disposable sandbox ledger. Saves are confirmed and recorded in Activity."
+              : "Run npm run dev with TALLY_LOCAL_LEDGER_EDITS=on, HITPAY_ENV=sandbox, TALLY_GATEWAY=fake or mcp, and TALLY_DEMO_DB_URL matching your disposable TALLY_DB_URL. Production and network writes stay disabled."}
           </p>
         </div>
       </div>
@@ -189,15 +189,15 @@ export function SettingsForm({
               <div className="grid gap-4 py-6 md:grid-cols-[minmax(0,1fr)_minmax(200px,280px)] md:gap-8">
                 <div className="max-w-xl">
                   <label htmlFor="minimum-age-mode" className="font-medium">
-                    Minimum overdue age
+                    Grace period after due date
                   </label>
                   <p
                     id="age-help"
                     className="mt-1 text-sm leading-6 text-muted-foreground"
                   >
-                    Calendar days from invoice issue date, using the policy date
-                    in Singapore time. No minimum includes today’s invoices.
-                    Future-dated invoices are excluded.
+                    Calendar days after the agreed due date, using the Singapore policy date.
+                    Invoices become overdue the next day, delayed by any grace period.
+                    Unknown due dates are excluded from automatic proposals.
                   </p>
                 </div>
                 <div className="space-y-3">
@@ -212,8 +212,8 @@ export function SettingsForm({
                     }}
                     className="h-10 w-full rounded-lg border bg-background px-3 text-sm"
                   >
-                    <option value="none">No minimum age</option>
-                    <option value="custom">Custom minimum age</option>
+                    <option value="none">No grace period</option>
+                    <option value="custom">Custom grace period</option>
                   </select>
                   {ageMode === "custom" && (
                     <div>
@@ -221,7 +221,7 @@ export function SettingsForm({
                         htmlFor="minimum-days"
                         className="mb-2 block text-xs text-muted-foreground"
                       >
-                        Invoices older than (calendar days)
+                        Grace period (calendar days)
                       </label>
                       <Input
                         id="minimum-days"
@@ -383,7 +383,7 @@ export function SettingsForm({
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Minimum overdue age</dt>
+                <dt className="text-muted-foreground">Grace period after due date</dt>
                 <dd className="mt-1 font-medium">
                   {ageLabel(baseline.minimumDays)} →{" "}
                   {parsed.ok

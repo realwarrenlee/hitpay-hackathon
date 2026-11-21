@@ -6,7 +6,6 @@ import { loadSnapshot } from "@/server/ledger";
 import { approveCustomerHold, approveSuggestion, importBytes, requestRemainder } from "@/server/flow";
 import { FakeGateway } from "@/server/hitpay/fake";
 import { handleWebhook, reconcilePayment, signBody } from "@/server/hitpay/webhook";
-import { reviewModel } from "@/server/views";
 import { readEnv } from "@/server/env";
 import { fixture, freshDb, NOW } from "../helpers";
 
@@ -69,21 +68,25 @@ test("a webhook then a poll writes one ledger change", async () => {
   expect(violations(again)).toEqual([]);
 });
 
-test("a polled amount that is not the expected cents stays in review", async () => {
+test("a polled amount mismatch is rejected without creating credit and can recover", async () => {
   const { db, gateway, request } = await ready();
+  const before = loadSnapshot(db);
   gateway.markAmount(request.hitpayRequestId!, cents(3800));
   const polled = await reconcilePayment(db, gateway, request.id, NOW);
   expect(polled.outcome).toBe("amount_mismatch");
   const settled = loadSnapshot(db);
   expect(settled.invoices.get("INV-104" as InvoiceId)?.status).toBe("partially_paid");
   expect(settled.paymentRequests.get(request.id)?.status).toBe("pending");
-  expect([...settled.allocations.values()].some((row) => row.state === "suggested" && row.amount === 3800)).toBe(true);
-  const card = reviewModel(settled).cards.find((row) => row.name === "HitPay TALLY-INV-104-1");
-  expect(card?.state).toBe("Suggested");
+  expect(settled.allocations).toEqual(before.allocations);
+  expect(settled.credits).toEqual(before.credits);
+  expect(settled.receipts.some((row) => row.outcome === "amount_mismatch")).toBe(true);
   const again = await reconcilePayment(db, gateway, request.id, NOW);
   expect(again.outcome).toBe("amount_mismatch");
   expect(loadSnapshot(db).audit.length).toBe(settled.audit.length);
   expect(loadSnapshot(db).credits.size).toBe(settled.credits.size);
+  gateway.markAmount(request.hitpayRequestId!, cents(3840));
+  expect((await reconcilePayment(db, gateway, request.id, NOW)).outcome).toBe("applied");
+  expect(loadSnapshot(db).invoices.get("INV-104" as InvoiceId)?.status).toBe("paid");
 });
 
 test("a short pay-first poll does not release the delivery", async () => {
@@ -97,7 +100,7 @@ test("a short pay-first poll does not release the delivery", async () => {
   expect(short.outcome).toBe("amount_mismatch");
   const settled = loadSnapshot(db);
   expect(settled.deliveries.get("DLV-201" as never)?.status).toBe("pay_first");
-  expect(settled.audit.some((event) => event.action === "amount_mismatch" && event.evidence.kind === "webhook" && event.evidence.source === "poll")).toBe(true);
+  expect(settled.audit.some((event) => event.action === "webhook_rejected" && (event.after as { why: string }).why === "amount_mismatch" && event.evidence.kind === "webhook" && event.evidence.source === "poll")).toBe(true);
   await reconcilePayment(db, gateway, delivery.id, NOW);
   expect(loadSnapshot(db).audit.length).toBe(settled.audit.length);
 });

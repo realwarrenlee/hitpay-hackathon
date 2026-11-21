@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { parseSgd, type Cents } from "@/domain/money";
 import type { HitpayRequestId, Instant, PaymentRequestId, ReferenceNumber } from "@/domain/ids";
-import type { SettlementSource } from "@/domain/types";
+import type { PaymentRequest, SettlementSource, WebhookRejection } from "@/domain/types";
 import type { DatabaseSync } from "node:sqlite";
 import { commitWebhook, loadSnapshot, type ReceiptDraft } from "@/server/ledger";
 import type { HitPayGateway } from "@/server/hitpay/gateway";
@@ -15,6 +15,8 @@ const EventSchema = z
     reference_number: z.string().min(1),
     amount: z.string().min(1),
     status: z.string().optional(),
+    currency: z.string().optional(),
+    purpose: z.string().optional(),
   })
   .passthrough();
 
@@ -40,6 +42,23 @@ export interface VerifiedSettlement {
   source: SettlementSource;
   eventType: string | null;
   rawBodySha256: string;
+}
+
+type RemotePayment = Extract<Awaited<ReturnType<HitPayGateway["getPaymentRequest"]>>, { ok: true }>["value"];
+
+function confirmationMismatch(request: PaymentRequest | undefined, remote: RemotePayment, id: HitpayRequestId): WebhookRejection | null {
+  if (!request || request.referenceNumber !== remote.referenceNumber) return "unknown_reference";
+  if (remote.id !== id || request.hitpayRequestId !== id) return "identity_mismatch";
+  if (remote.currency !== "SGD") return "currency_mismatch";
+  if (remote.purpose !== request.purpose.kind) return "purpose_mismatch";
+  if (remote.amount !== request.amount) return "amount_mismatch";
+  return null;
+}
+
+function rejectConfirmation(db: DatabaseSync, why: WebhookRejection, id: HitpayRequestId, source: SettlementSource, hash: string, now: Instant) {
+  return commitWebhook(db, { receivedAt: now, eventType: source, signatureOk: true, hitpayRequestId: id,
+    dedupeKey: `rejected:${source}:${id}:${hash}`, outcome: why, rawBodySha256: hash, source },
+  (receiptId) => ({ kind: "webhook_rejected", receiptId, why, source }), now);
 }
 
 export function settleVerifiedPayment(db: DatabaseSync, input: VerifiedSettlement, now: Instant) {
@@ -77,7 +96,12 @@ export async function reconcilePayment(db: DatabaseSync, gateway: HitPayGateway,
   const remote = await gateway.getPaymentRequest(request.hitpayRequestId);
   if (!remote.ok) return { outcome: "tool_error" as const };
   if (remote.value.status !== "completed") return { outcome: remote.value.status };
-  if (remote.value.referenceNumber !== request.referenceNumber) return { outcome: "unknown_reference" as const };
+  const mismatch = confirmationMismatch(request, remote.value, request.hitpayRequestId);
+  if (mismatch) {
+    const hash = createHash("sha256").update(JSON.stringify(remote.value)).digest("hex");
+    rejectConfirmation(db, mismatch, request.hitpayRequestId, "poll", hash, now);
+    return { outcome: mismatch };
+  }
   const settled = settleVerifiedPayment(
     db,
     {
@@ -159,6 +183,17 @@ export async function handleWebhook(
   }
 
   const paid = amount.value;
+  const request = [...loadSnapshot(db).paymentRequests.values()].find((row) => row.referenceNumber === referenceNumber);
+  const mismatch = confirmationMismatch(request, remote.value, hitpayRequestId)
+    ?? (parsed.currency && parsed.currency.toUpperCase() !== "SGD" ? "currency_mismatch" : null)
+    ?? (parsed.purpose && parsed.purpose !== request?.purpose.kind ? "purpose_mismatch" : null)
+    ?? (parsed.status && parsed.status !== "completed" ? "not_completed" : null)
+    ?? (parsed.event_type && parsed.event_type !== "payment_request.completed" ? "event_mismatch" : null)
+    ?? (paid !== remote.value.amount ? "amount_mismatch" : null);
+  if (mismatch) {
+    rejectConfirmation(db, mismatch, hitpayRequestId, "webhook", sha, now);
+    return { status: 200, body: { outcome: mismatch } };
+  }
   const result = settleVerifiedPayment(
     db,
     {

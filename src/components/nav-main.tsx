@@ -14,10 +14,10 @@ export function NavMain({
   const pathname = usePathname();
   return (
     <SidebarGroup>
-      {label ? <SidebarGroupLabel>{label}</SidebarGroupLabel> : null}
+      {label ? <SidebarGroupLabel className="text-[10px] tracking-wide uppercase">{label}</SidebarGroupLabel> : null}
       <SidebarMenu>
         {items.map((item) => {
-          const active = item.url === "/" ? pathname === "/" : pathname === item.url || pathname.startsWith(`${item.url}/`);
+          const active = item.url === "/" ? pathname === "/" : pathname === item.url || pathname.startsWith(`${item.url}/`) || (item.url === "/review" && pathname === "/import");
           return (
             <SidebarMenuItem key={item.title}>
               <SidebarMenuButton isActive={active} tooltip={item.title} render={<Link href={item.url} />}>

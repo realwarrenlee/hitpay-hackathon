@@ -64,14 +64,14 @@ export function parsePolicyInput(
   if (ageMode === "custom") {
     if (!/^[1-9]\d*$/.test(minimumDays.trim()))
       errors.minimumDays =
-        "Enter a positive whole number of days, or choose No minimum age.";
+        "Enter a positive whole number of days, or choose No grace period.";
     else {
       days = parseInt(minimumDays.trim(), 10);
       if (!Number.isSafeInteger(days) || days > MAX_POLICY_DAYS)
         errors.minimumDays = `Days cannot exceed ${MAX_POLICY_DAYS}, the span of the supported invoice-date calendar.`;
     }
   } else if (minimumDays !== "")
-    errors.minimumDays = "Choose No minimum age without a numeric day value.";
+    errors.minimumDays = "Choose No grace period without a numeric day value.";
   if (Object.keys(errors).length || !money?.ok) return { ok: false, errors };
   return {
     ok: true,

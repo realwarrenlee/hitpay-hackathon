@@ -7,5 +7,5 @@ export interface HitPayGateway {
   createInvoice(input: { invoiceId: InvoiceId; customerName: string; amount: Cents; dueOn: IsoDate }): Promise<Result<{ hitpayInvoiceId: string }, GatewayError>>;
   listInvoices(): Promise<Result<readonly { hitpayInvoiceId: string; reference: string | null }[], GatewayError>>;
   createPaymentRequest(input: { referenceNumber: ReferenceNumber; amount: Cents; purpose: string; expiresAt: string; webhookUrl: string }): Promise<Result<{ hitpayRequestId: HitpayRequestId; url: string; status: "pending" | "completed" | "other" }, GatewayError>>;
-  getPaymentRequest(id: HitpayRequestId): Promise<Result<{ status: "pending" | "completed" | "other"; amount: Cents; referenceNumber: string }, GatewayError>>;
+  getPaymentRequest(id: HitpayRequestId): Promise<Result<{ id: HitpayRequestId; currency: string | null; purpose: string | null; status: "pending" | "completed" | "other"; amount: Cents; referenceNumber: string }, GatewayError>>;
 }

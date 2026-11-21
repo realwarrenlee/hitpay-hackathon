@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/presentation";
 import { CopyReminder } from "@/components/copy-reminder";
 import { MutationForm } from "@/components/mutation-form";
 import { PageHeader } from "@/components/page-header";
@@ -5,7 +6,7 @@ import { StatusFeedback } from "@/components/status-feedback";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Shell } from "@/components/shell";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,7 +19,6 @@ import {
   checkPaymentStatusAction,
   requestRemainderAction,
 } from "@/app/actions";
-import { readEnv } from "@/server/env";
 import { getDb, loadSnapshot } from "@/server/ledger";
 import { reviewModel } from "@/server/views";
 
@@ -33,48 +33,52 @@ export default async function InvoicePage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const env = readEnv();
   const snapshot = loadSnapshot(getDb());
   const invoice = reviewModel(snapshot).invoices.find((row) => row.id === id);
   const stored = snapshot.invoices.get(id as never);
   if (!invoice || !stored) notFound();
   const customer = snapshot.customers.get(stored.customerId);
   return (
-    <Shell today={env.today} mode={env.gateway === "fake" ? "fake" : "sandbox"}>
+    <Shell>
       <PageHeader
         title={invoice.name}
         description={customer?.name ?? stored.customerId}
       />
-      <Card className="w-full max-w-4xl">
+      <Card className="w-full">
         <CardHeader>
-          <CardTitle className="flex items-center justify-between gap-2">
-            <span>{invoice.status}</span>
-            <Badge
-              variant={invoice.status === "Paid" ? "secondary" : "outline"}
-            >
+          <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+            Invoice balance
+            <StatusBadge tone={invoice.status === "Paid" ? "success" : "neutral"}>
               {invoice.status}
-            </Badge>
+            </StatusBadge>
           </CardTitle>
           <CardDescription>
-            {invoice.remainingLabel}. Issued {stored.issuedOn}. Total is the
-            open balance plus what has already been allocated.
+            Issued {formatDate(stored.issuedOn)}. Due{" "}
+            {stored.dueOn
+              ? formatDate(stored.dueOn)
+              : "date unknown — excluded from automatic overdue proposals"}
+            .
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p role="status" className="text-sm">
-            {invoice.status}
-          </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-3xl font-semibold tracking-tight tabular-nums">
             {invoice.remainingLabel}
           </p>
-          {invoice.status !== "Paid" ? (
+          {invoice.unresolvedReference ? (
+            <p role="alert" className="text-sm">
+              Checkout creation unresolved: {invoice.unresolvedReference}.
+              Inspect this reference with the provider before retrying. No
+              automatic retry is safe.
+            </p>
+          ) : null}
+          {invoice.remaining > 0 && !invoice.unresolvedReference ? (
             <MutationForm action={requestRemainderAction}>
               <input type="hidden" name="invoiceId" value={invoice.id} />
               <Button type="submit">{invoice.requestLabel}</Button>
             </MutationForm>
           ) : null}
           <StatusFeedback status={query.status} />
-          {invoice.requestUrl ? (
+          {invoice.remaining > 0 && invoice.requestUrl ? (
             <CopyReminder url={invoice.requestUrl} />
           ) : null}
           {invoice.pendingRequestId ? (

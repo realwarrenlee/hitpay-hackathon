@@ -29,9 +29,16 @@ import {
 } from "@/server/flow";
 import { reviewModel } from "@/server/views";
 import { simulatePayAction } from "@/app/actions";
+import { installLocalPolicyContext } from "@/server/local-request-context";
+function localSimulation(form: FormData) {
+  vi.stubEnv("NODE_ENV", "development");
+  vi.stubEnv("TALLY_LOCAL_LEDGER_EDITS", "on");
+  return installLocalPolicyContext().run({ localAddress: "127.0.0.1", remoteAddress: "127.0.0.1", host: "127.0.0.1:43123", origin: "http://127.0.0.1:43123", method: "POST", port: 43123 }, () => simulatePayAction(form));
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   control.mode = "fake";
 });
 async function checkout() {
@@ -68,7 +75,7 @@ describe("simulated checkout mode guard", () => {
   test("cached fake adapters work across constructor identities and reconcile the exact remainder", async () => {
     const { db, gateway, form } = await checkout();
     expect(gateway).not.toBeInstanceOf(FakeGateway);
-    await expect(simulatePayAction(form)).rejects.toThrow(
+    await expect(localSimulation(form)).rejects.toThrow(
       "Payment%20recorded.",
     );
     expect(gateway.markStatus).toHaveBeenCalledOnce();
@@ -82,7 +89,7 @@ describe("simulated checkout mode guard", () => {
   test("sandbox mode cannot simulate a payment even when an adapter exposes simulation methods", async () => {
     const { db, gateway, form } = await checkout();
     control.mode = "mcp";
-    await expect(simulatePayAction(form)).rejects.toThrow(
+    await expect(localSimulation(form)).rejects.toThrow(
       "Simulated%20checkout%20is%20unavailable",
     );
     expect(gateway.markStatus).not.toHaveBeenCalled();
@@ -91,6 +98,14 @@ describe("simulated checkout mode guard", () => {
         (row) => row.id === "INV-104",
       )?.status,
     ).toBe("Partially paid");
+    db.close();
+  });
+  test("lost fake gateway state cannot be presented as a successful payment", async () => {
+    const { db, form } = await checkout();
+    control.gateway = new FakeGateway();
+    await expect(localSimulation(form)).rejects.toThrow("Payment%20not%20applied");
+    expect(ledger.loadSnapshot(db).invoices.get("INV-104" as never)!.remaining).toBe(3840);
+    expect(ledger.loadSnapshot(db).paymentRequests.values().next().value!.status).toBe("pending");
     db.close();
   });
 });

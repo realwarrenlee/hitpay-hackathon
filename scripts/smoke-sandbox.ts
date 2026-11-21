@@ -83,7 +83,7 @@ async function smoke(
       note("get_payment_request", false, quiet(readBack.error.detail));
     } else {
       const centsBack = readBack.value.amount as number;
-      const matched = centsBack === 3840 && readBack.value.status === "pending" && readBack.value.referenceNumber === reference;
+      const matched = centsBack === 3840 && readBack.value.status === "pending" && readBack.value.referenceNumber === reference && readBack.value.id === createdId && readBack.value.currency === "SGD" && readBack.value.purpose === "Tally sandbox smoke";
       note("get_payment_request", matched, matched ? "cents=3840 status=pending" : `cents=${centsBack} status=${readBack.value.status} reference=${readBack.value.referenceNumber}`);
     }
   }

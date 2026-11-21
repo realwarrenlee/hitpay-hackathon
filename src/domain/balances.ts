@@ -80,8 +80,9 @@ export function overdueBalance(
 ): Cents {
   const rows = balances.filter((row) => {
     if (row.balance.status !== "open" && row.balance.status !== "partially_paid") return false;
-    const age = daysBetween(row.invoice.issuedOn, today);
-    return age >= 0 && (settings.overdueDaysThreshold == null || age > settings.overdueDaysThreshold);
+    if (row.invoice.dueOn == null) return false;
+    const pastDue = daysBetween(row.invoice.dueOn, today);
+    return pastDue > (settings.overdueDaysThreshold ?? 0);
   });
   return sum(rows.map((row) => row.balance.remaining));
 }

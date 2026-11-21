@@ -1,10 +1,12 @@
 "use client";
+import { useLedgerAccess } from "@/components/ledger-access";
 import { useFormStatus } from "react-dom";
 function PendingFields({ children }: { children: React.ReactNode }) {
   const { pending } = useFormStatus();
+  const editable = useLedgerAccess();
   return (
     <fieldset
-      disabled={pending}
+      disabled={pending || !editable}
       className="min-w-0 contents"
       aria-busy={pending}
     >

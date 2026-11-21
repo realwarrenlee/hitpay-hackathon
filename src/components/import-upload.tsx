@@ -1,4 +1,5 @@
 "use client";
+import { useLedgerAccess } from "@/components/ledger-access";
 import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import {
@@ -10,8 +11,9 @@ import { importAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 function ImportSubmit({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
+  const editable = useLedgerAccess();
   return (
-    <Button type="submit" disabled={pending || disabled} className="min-w-36">
+    <Button type="submit" disabled={pending || disabled || !editable} className="min-w-36">
       {pending ? (
         <>
           <LoaderCircleIcon className="size-4 animate-spin" />
@@ -70,7 +72,7 @@ export function ImportUpload() {
         </div>
         <p className="font-medium">Drop your bank file here</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          or choose a DBS CSV from your device
+          or choose a file from your device
         </p>
         <label className="mt-5 cursor-pointer rounded-lg border bg-card px-4 py-2 text-sm font-medium hover:bg-muted focus-within:outline-2 focus-within:outline-ring">
           Choose CSV file
@@ -85,9 +87,6 @@ export function ImportUpload() {
             onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
           />
         </label>
-        <p className="mt-4 text-xs text-muted-foreground">
-          DBS bank export · .csv
-        </p>
       </div>
       {file && (
         <div className="flex items-center gap-3 rounded-lg border p-3">
@@ -100,10 +99,7 @@ export function ImportUpload() {
           {error}
         </p>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-xs text-muted-foreground">
-          Bank: <span className="font-medium text-foreground">DBS</span>
-        </p>
+      <div className="flex justify-end">
         <ImportSubmit disabled={Boolean(error) || !file} />
       </div>
     </form>

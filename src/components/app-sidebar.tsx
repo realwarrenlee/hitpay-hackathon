@@ -1,12 +1,12 @@
 "use client";
 import Link from "next/link";
 import {
+  TruckIcon,
   LayoutDashboardIcon,
-  UploadIcon,
-  ListChecksIcon,
+  ArrowLeftRightIcon,
   UsersIcon,
   SettingsIcon,
-  ScrollTextIcon,
+  HistoryIcon,
 } from "lucide-react";
 import { TallyLogo } from "@/components/tally-logo";
 import { NavMain } from "@/components/nav-main";
@@ -20,11 +20,13 @@ import {
 } from "@/components/ui/sidebar";
 const items = [
   { title: "Overview", url: "/", icon: <LayoutDashboardIcon /> },
-  { title: "Import", url: "/import", icon: <UploadIcon /> },
-  { title: "Review", url: "/review", icon: <ListChecksIcon /> },
+  { title: "Deliveries", url: "/deliveries", icon: <TruckIcon /> },
+  { title: "Bank credits", url: "/review", icon: <ArrowLeftRightIcon /> },
   { title: "Customers", url: "/customer", icon: <UsersIcon /> },
+];
+const secondaryItems = [
+  { title: "Activity", url: "/audit", icon: <HistoryIcon /> },
   { title: "Settings", url: "/settings", icon: <SettingsIcon /> },
-  { title: "Audit", url: "/audit", icon: <ScrollTextIcon /> },
 ];
 export function AppSidebar() {
   return (
@@ -43,7 +45,8 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={items} />
+        <NavMain items={items} label="Workspace" />
+        <NavMain items={secondaryItems} label="Management" />
       </SidebarContent>
     </Sidebar>
   );

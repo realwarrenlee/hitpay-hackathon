@@ -2,6 +2,7 @@ import { TallyLogo } from "@/components/tally-logo";
 import { notFound } from "next/navigation";
 import { DriverLive } from "@/components/driver-live";
 import { getDb, loadSnapshot } from "@/server/ledger";
+import { localLedgerAccess } from "@/server/local-ledger-access";
 import { driverModel } from "@/server/views";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ export default async function DriverPage({
         id={model.id}
         initialLabel={model.label}
         initialUrl={model.url}
-        paymentRequestId={model.paymentRequestId}
+        paymentRequestId={localLedgerAccess() ? model.paymentRequestId : null}
       />
     </main>
   );

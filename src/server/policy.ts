@@ -32,7 +32,7 @@ export function savePolicy(input: unknown): PolicySaveResult {
       ok: false,
       code: "access_denied",
       message:
-        "Policy editing requires explicitly enabled loopback development mode. Production and network writes are disabled.",
+        "Policy editing requires an opted-in disposable sandbox ledger on the local development server. Production, live HitPay and network writes are disabled.",
     };
   const parsed = parsePolicyInput(input);
   if (!parsed.ok)

@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS invoice (
   amount_remaining_cents INTEGER NOT NULL CHECK (amount_remaining_cents >= 0),
   status TEXT NOT NULL,
   issued_on TEXT NOT NULL,
+  due_on TEXT,
   follow_up_on TEXT,
   CHECK (total_cents = allocated_cents + written_off_cents + amount_remaining_cents)
 );
@@ -162,6 +163,7 @@ export function openDatabase(path: string): DatabaseSync {
   const db = new DatabaseSync(path);
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(SCHEMA);
+  ensureColumn(db, "invoice", "due_on", "TEXT");
   ensureColumn(db, "settings", "policy_version", "INTEGER NOT NULL DEFAULT 0 CHECK (policy_version >= 0)");
   ensureColumn(db, "webhook_receipt", "source", "TEXT");
   db.exec(`CREATE TABLE IF NOT EXISTS hint_cache (

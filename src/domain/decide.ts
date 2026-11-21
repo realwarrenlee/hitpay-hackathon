@@ -1,5 +1,6 @@
 import { cents, type Cents } from "@/domain/money";
 import type {
+  DeliveryId,
   AllocationId,
   CreditId,
   CustomerId,
@@ -10,6 +11,7 @@ import type {
 } from "@/domain/ids";
 import { invoiceBalance, overdueBalance, referenceNumber, signedRemaining, signedUnallocated, dedupeKey } from "@/domain/balances";
 import { evaluateCutOff } from "@/domain/cutoff";
+import { InvoiceEntry, DeliveryEntry } from "@/domain/entry";
 import { validPolicy } from "@/domain/policy";
 import type {
   Allocation,
@@ -161,15 +163,56 @@ function commitAllocation(s: LedgerSnapshot, allocation: Allocation, now: Instan
 
 function apply(s: LedgerSnapshot, cmd: Command, now: Instant, audits: AuditEvent[], followUps: Command[], info: Record<string, string | number>): Rejection | null {
   switch (cmd.kind) {
+    case "create_invoice": {
+      if (cmd.by.kind !== "human" || !cmd.by.name.trim()) return rej("wrong_actor", "Human entry required");
+      const parsed = InvoiceEntry.safeParse(cmd.input);
+      if (!parsed.success) return rej("invalid_input", "Invalid invoice fields");
+      const value = parsed.data;
+      if (!s.customers.has(value.customerId as CustomerId)) return rej("not_found", "Customer does not exist");
+      const existing = s.invoices.get(value.id as InvoiceId);
+      if (existing) {
+        if (existing.customerId !== value.customerId || existing.total !== value.amount || existing.issuedOn !== value.issuedOn || existing.dueOn !== value.dueOn) return rej("duplicate", "Invoice reference already exists with different details");
+        info.invoiceId = existing.id;
+        info.existing = 1;
+        return null;
+      }
+      const invoice = { id: value.id as InvoiceId, customerId: value.customerId as CustomerId, total: value.amount,
+        issuedOn: value.issuedOn, dueOn: value.dueOn, followUpOn: null, hitpayInvoiceId: null, stripeInvoiceId: null,
+        allocated: cents(0), writtenOff: cents(0), remaining: value.amount, status: "open" as const };
+      s.invoices.set(invoice.id, invoice);
+      audits.push(makeAudit(s, now, cmd.by, "invoice", invoice.id, "invoice_created", null, invoice, { kind: "human_reason", reason: "Supplier entered invoice with agreed due date" }));
+      info.invoiceId = invoice.id;
+      return null;
+    }
+    case "create_delivery": {
+      if (cmd.by.kind !== "human" || !cmd.by.name.trim()) return rej("wrong_actor", "Human entry required");
+      const parsed = DeliveryEntry.safeParse(cmd.input);
+      if (!parsed.success) return rej("invalid_input", "Invalid delivery fields");
+      const value = parsed.data;
+      if (!s.customers.has(value.customerId as CustomerId)) return rej("not_found", "Customer does not exist");
+      const existing = s.deliveries.get(value.id as DeliveryId);
+      if (existing) {
+        if (existing.customerId !== value.customerId || existing.amount !== value.amount || existing.scheduledFor !== value.scheduledFor) return rej("duplicate", "Delivery identifier already exists with different details");
+        info.deliveryId = existing.id;
+        info.existing = 1;
+        return null;
+      }
+      const delivery: Delivery = { id: value.id as DeliveryId, customerId: value.customerId as CustomerId, amount: value.amount,
+        scheduledFor: value.scheduledFor, status: "on_credit", paymentRequestId: null, creditDecisionBy: null };
+      s.deliveries.set(delivery.id, delivery);
+      audits.push(makeAudit(s, now, cmd.by, "delivery", delivery.id, "delivery_created", null, delivery, { kind: "human_reason", reason: "Supplier scheduled delivery; policy evaluation is a separate action" }));
+      info.deliveryId = delivery.id;
+      return null;
+    }
     case "update_policy": {
       if (cmd.by.kind !== "human" || cmd.by.access !== "loopback_development" || !cmd.by.name.trim()) return rej("wrong_actor", "Local development operator required");
       if (!validPolicy(cmd.values) || !Number.isSafeInteger(cmd.expectedVersion) || cmd.expectedVersion < 0 || cmd.expectedVersion >= Number.MAX_SAFE_INTEGER) return rej("invalid_policy", "Invalid overdue policy");
       if (cmd.expectedVersion !== s.policyVersion) return rej("policy_conflict", "The policy changed. Reload the latest configuration before saving.");
       if (cmd.values.overdueBalanceThreshold === s.settings.overdueBalanceThreshold && cmd.values.overdueDaysThreshold === s.settings.overdueDaysThreshold) return null;
-      const before = { ...s.settings, version: s.policyVersion };
+      const before = { ...s.settings, version: s.policyVersion, basis: "due_date" };
       s.settings = { ...cmd.values };
       s.policyVersion += 1;
-      audits.push(makeAudit(s, now, cmd.by, "settings", "settings", "policy_updated", before, { ...s.settings, version: s.policyVersion }, { kind: "human_reason", reason: "Unauthenticated loopback development update; future evaluations only" }));
+      audits.push(makeAudit(s, now, cmd.by, "settings", "settings", "policy_updated", before, { ...s.settings, version: s.policyVersion, basis: "due_date" }, { kind: "human_reason", reason: "Unauthenticated loopback development update; future evaluations only" }));
       return null;
     }
     case "import_batch": {
@@ -236,7 +279,12 @@ function apply(s: LedgerSnapshot, cmd: Command, now: Instant, audits: AuditEvent
     case "approve":
       return approveSuggestion(s, cmd.suggestionId, cmd.pick, cmd.by, now, audits, followUps);
     case "approve_preselected": {
-      const open = [...s.suggestions.values()].filter((row) => row.status === "open" && row.body.preselected);
+      const selected = cmd.suggestionIds ? new Set(cmd.suggestionIds) : null;
+      if (selected && (!selected.size || selected.size !== cmd.suggestionIds?.length || [...selected].some((id) => {
+        const suggestion = s.suggestions.get(id);
+        return !suggestion || suggestion.status !== "open" || !suggestion.body.preselected;
+      }))) return rej("illegal_transition", "Select current exact-reference suggestions");
+      const open = [...s.suggestions.values()].filter((row) => row.status === "open" && row.body.preselected && (!selected || selected.has(row.id)));
       for (const suggestion of open) {
         const error = approveSuggestion(s, suggestion.id, null, cmd.by, now, audits, followUps);
         if (error) return error;
@@ -290,8 +338,10 @@ function apply(s: LedgerSnapshot, cmd: Command, now: Instant, audits: AuditEvent
       return null;
     }
     case "commit_approved": {
+      const selected = cmd.allocationIds ? new Set(cmd.allocationIds) : null;
+      if (selected && (!selected.size || selected.size !== cmd.allocationIds?.length || [...selected].some((id) => s.allocations.get(id)?.state !== "approved"))) return rej("illegal_transition", "Select currently approved allocations");
       for (const allocation of s.allocations.values()) {
-        if (allocation.state !== "approved") continue;
+        if (allocation.state !== "approved" || (selected && !selected.has(allocation.id))) continue;
         commitAllocation(s, allocation, now, audits, { kind: "human_reason", reason: `Commit approved by ${cmd.by.name}` });
       }
       return null;
@@ -344,11 +394,11 @@ function apply(s: LedgerSnapshot, cmd: Command, now: Instant, audits: AuditEvent
     case "webhook_confirmed":
       return confirmWebhook(s, cmd, now, audits, followUps, info);
     case "webhook_rejected": {
-      audits.push(makeAudit(s, now, { kind: "system" }, "webhook", cmd.receiptId, "webhook_rejected", null, { why: cmd.why }, { kind: "webhook", receiptId: cmd.receiptId, hitpayRequestId: null, source: "webhook" }));
+      audits.push(makeAudit(s, now, { kind: "system" }, "webhook", cmd.receiptId, "webhook_rejected", null, { why: cmd.why }, { kind: "webhook", receiptId: cmd.receiptId, hitpayRequestId: null, source: cmd.source ?? "webhook" }));
       return null;
     }
     case "check_cutoff":
-      return checkCutoff(s, cmd.customerId, now, audits);
+      return checkCutoff(s, cmd.customerId, now, audits, cmd.by);
     case "approve_hold":
       return approveHold(s, cmd.customerId, cmd.by, now, audits, info);
     case "reject_hold":
@@ -421,6 +471,9 @@ function createPaymentRequest(
   audits: AuditEvent[],
   info: Record<string, string | number>,
 ): Rejection | null {
+  const unresolved = [...s.paymentRequests.values()].find((row) => row.status === "creating" &&
+    (purpose.kind === "remainder" ? row.purpose.kind === "remainder" && row.purpose.invoiceId === purpose.invoiceId : row.purpose.kind === "pay_first" && row.purpose.deliveryId === purpose.deliveryId));
+  if (unresolved) return rej("request_unresolved", "Checkout creation is unresolved. Inspect the provider by the existing reference before retrying; no duplicate was created.");
   let amount: Cents;
   if (purpose.kind === "remainder") {
     const inv = s.invoices.get(purpose.invoiceId);
@@ -471,12 +524,19 @@ function confirmWebhook(s: LedgerSnapshot, cmd: Extract<Command, { kind: "webhoo
   const request = [...s.paymentRequests.values()].find((row) => row.referenceNumber === cmd.event.referenceNumber);
   if (!request) return rej("not_found", cmd.event.referenceNumber);
   const evidence = settlementEvidence(cmd.event);
+  let mismatch: string | null = null;
+  if (request.hitpayRequestId !== cmd.event.hitpayRequestId) mismatch = "identity_mismatch";
+  else if (request.status !== "pending" || request.amount !== cmd.event.amountPaid) mismatch = "amount_mismatch";
+  else if (request.purpose.kind === "pay_first") {
+    const delivery = s.deliveries.get(request.purpose.deliveryId);
+    if (!delivery || delivery.amount !== request.amount || delivery.paymentRequestId !== request.id) mismatch = "obligation_mismatch";
+  } else if (!s.invoices.has(request.purpose.invoiceId)) mismatch = "obligation_mismatch";
+  if (mismatch) {
+    audits.push(makeAudit(s, now, { kind: "system" }, "payment_request", request.id, mismatch, null, { source: cmd.event.source }, evidence));
+    info.outcome = mismatch;
+    return null;
+  }
   if (request.purpose.kind === "pay_first") {
-    if ((cmd.event.amountPaid as number) !== (request.amount as number)) {
-      audits.push(makeAudit(s, now, { kind: "system" }, "payment_request", request.id, "amount_mismatch", { amount: request.amount }, { amount: cmd.event.amountPaid, source: cmd.event.source }, evidence));
-      info.outcome = "amount_mismatch";
-      return null;
-    }
     const delivery = s.deliveries.get(request.purpose.deliveryId);
     const customer = delivery ? s.customers.get(delivery.customerId) : undefined;
     const matches = delivery && customer && delivery.status === "pay_first" && customer.hold.status === "pay_first" && customer.hold.deliveryId === delivery.id;
@@ -557,14 +617,14 @@ function confirmWebhook(s: LedgerSnapshot, cmd: Extract<Command, { kind: "webhoo
   return null;
 }
 
-function nextDelivery(s: LedgerSnapshot, customerId: CustomerId): Delivery | null {
+export function nextDelivery(s: LedgerSnapshot, customerId: CustomerId): Delivery | null {
   const rows = [...s.deliveries.values()]
     .filter((row) => row.customerId === customerId && row.status === "on_credit" && row.creditDecisionBy == null && row.scheduledFor >= s.today)
     .sort((a, b) => (a.scheduledFor < b.scheduledFor ? -1 : 1));
   return rows[0] ?? null;
 }
 
-function checkCutoff(s: LedgerSnapshot, customerId: CustomerId | "all", now: Instant, audits: AuditEvent[]): Rejection | null {
+function checkCutoff(s: LedgerSnapshot, customerId: CustomerId | "all", now: Instant, audits: AuditEvent[], by: HumanActor | SystemActor): Rejection | null {
   const customers = customerId === "all" ? [...s.customers.values()] : [s.customers.get(customerId)].filter((row): row is Customer => row != null);
   if (customerId !== "all" && customers.length === 0) return rej("not_found", String(customerId));
   for (const customer of customers) {
@@ -572,19 +632,23 @@ function checkCutoff(s: LedgerSnapshot, customerId: CustomerId | "all", now: Ins
       .filter((inv) => inv.customerId === customer.id)
       .map((invoice) => ({ invoice, balance: invoiceBalance(invoice, [...s.allocations.values()], s.writeOffs) }));
     const overdue = overdueBalance(balances, s.settings, s.today);
+    const candidate = nextDelivery(s, customer.id);
     const decision = evaluateCutOff({
       hold: customer.hold,
       overdue,
       settings: s.settings,
-      nextDelivery: nextDelivery(s, customer.id),
+      nextDelivery: candidate,
     });
+    if (by.kind === "human" && candidate) audits.push(makeAudit(s, now, by, "delivery", candidate.id, "delivery_evaluated", null,
+      { overdue, proposed: decision.propose, reason: decision.propose ? "over_threshold" : decision.why, policyDate: s.today, policyVersion: s.policyVersion, settings: { ...s.settings } },
+      { kind: "human_reason", reason: "Explicit delivery policy evaluation" }));
     if (!decision.propose) continue;
     const delivery = s.deliveries.get(decision.deliveryId);
     if (!delivery || delivery.status !== "on_credit") continue;
     customer.hold = { status: "proposed", deliveryId: delivery.id, proposedAt: now, overdue: decision.overdue };
     delivery.status = "proposed_pay_first";
     audits.push(
-        makeAudit(s, now, { kind: "system" }, "customer", customer.id, "propose_hold", { status: "normal" }, { status: "proposed", deliveryId: delivery.id, overdue: decision.overdue, policyVersion: s.policyVersion }, {
+        makeAudit(s, now, { kind: "system" }, "customer", customer.id, "propose_hold", { status: "normal" }, { status: "proposed", deliveryId: delivery.id, overdue: decision.overdue, policyVersion: s.policyVersion, policyDate: s.today, settings: { ...s.settings } }, {
         kind: "threshold",
         overdue: decision.overdue,
         threshold: decision.threshold,
@@ -633,6 +697,11 @@ function releaseHold(
 }
 
 export function decide(state: LedgerSnapshot, cmd: Command, now: Instant): Result<Change, Rejection> {
+  if ((cmd.kind === "approve_hold" || cmd.kind === "reject_hold" || cmd.kind === "override_hold") && cmd.expectedDeliveryId) {
+    const hold = state.customers.get(cmd.customerId)?.hold;
+    if (!hold || hold.status === "normal" || hold.deliveryId !== cmd.expectedDeliveryId) return { ok: false, error: rej("illegal_transition", "This delivery is no longer the current hold") };
+  }
+  if (cmd.kind === "check_cutoff" && cmd.expectedDeliveryId && (cmd.customerId === "all" || nextDelivery(state, cmd.customerId)?.id !== cmd.expectedDeliveryId)) return { ok: false, error: rej("illegal_transition", "Evaluate the earliest eligible delivery first") };
   const snapshot = structuredClone(state);
   const audit: AuditEvent[] = [];
   const followUps: Command[] = [];

@@ -53,7 +53,7 @@ export function DriverLive({ id, initialLabel, initialUrl, paymentRequestId }: {
       {url && !released ? (
         <>
           <PayQr url={url} />
-          <a className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-medium text-primary-foreground" href={url}>Show PayNow QR</a>
+          <a className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-primary text-base font-medium text-primary-foreground" href={url}>Open checkout</a>
         </>
       ) : null}
       {paymentRequestId && !released ? (
@@ -63,7 +63,7 @@ export function DriverLive({ id, initialLabel, initialUrl, paymentRequestId }: {
           <button type="submit" className="inline-flex h-12 w-full items-center justify-center rounded-xl border text-base font-medium">Check payment status</button>
         </form>
       ) : null}
-      {watching && !released ? <p className="text-sm text-muted-foreground">Checking HitPay every 5 seconds.</p> : null}
+      {watching && !released ? <p className="text-sm text-muted-foreground">Checking payment every 5 seconds.</p> : null}
     </div>
   );
 }

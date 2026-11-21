@@ -1,3 +1,5 @@
+import { existsSync, realpathSync } from "node:fs";
+import { resolve } from "node:path";
 import type { Instant, IsoDate } from "@/domain/ids";
 
 export interface AppEnv {
@@ -89,6 +91,30 @@ export function readSandboxSmoke(): { skip: string } | { mcpUrl: string; apiKey:
   };
 }
 
+export function readLocalLedgerMode(): boolean {
+  return process.env.NODE_ENV === "development" && process.env.TALLY_LOCAL_LEDGER_EDITS === "on";
+}
+
 export function readLocalPolicyMode(): boolean {
-  return process.env.NODE_ENV === "development" && process.env.TALLY_LOCAL_POLICY_EDITS === "on";
+  if (
+    !readLocalLedgerMode() ||
+    !["fake", "mcp"].includes(process.env.TALLY_GATEWAY?.trim() ?? "") ||
+    process.env.HITPAY_ENV?.trim() !== "sandbox" ||
+    process.env.HITPAY_MCP_URL?.includes("mcp.hit-pay.com")
+  ) return false;
+  const selected = process.env.TALLY_DB_URL?.trim();
+  const disposable = process.env.TALLY_DEMO_DB_URL?.trim();
+  if (!selected || !disposable) return false;
+  const dbPath = sqlitePath(selected);
+  const demoPath = sqlitePath(disposable);
+  if (dbPath === ":memory:" || demoPath === ":memory:")
+    return dbPath === demoPath;
+  const canonical = (path: string) => {
+    const resolved = existsSync(path) ? realpathSync(path) : resolve(path);
+    return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+  };
+  return (
+    canonical(dbPath) === canonical(demoPath) &&
+    canonical(dbPath) !== canonical("data/tally.db")
+  );
 }

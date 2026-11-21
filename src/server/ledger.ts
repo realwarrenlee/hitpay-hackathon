@@ -115,6 +115,7 @@ export function loadSnapshot(db: DatabaseSync): LedgerSnapshot {
       customerId: String(row.customer_id) as CustomerId,
       total: cents(asInt(row.total_cents)),
       issuedOn: asIsoDate(String(row.issued_on)),
+      dueOn: row.due_on == null ? null : asIsoDate(String(row.due_on)),
       followUpOn: row.follow_up_on == null ? null : asIsoDate(String(row.follow_up_on)),
       allocated: cents(asInt(row.allocated_cents)),
       writtenOff: cents(asInt(row.written_off_cents)),
@@ -273,10 +274,10 @@ export function persist(db: DatabaseSync, snap: LedgerSnapshot, audits: readonly
   for (const inv of snap.invoices.values()) {
     upsert(
       db,
-      `INSERT INTO invoice (id, hitpay_invoice_id, stripe_invoice_id, customer_id, total_cents, allocated_cents, written_off_cents, amount_remaining_cents, status, issued_on, follow_up_on)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO invoice (id, hitpay_invoice_id, stripe_invoice_id, customer_id, total_cents, allocated_cents, written_off_cents, amount_remaining_cents, status, issued_on, follow_up_on, due_on)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET allocated_cents = excluded.allocated_cents, written_off_cents = excluded.written_off_cents, amount_remaining_cents = excluded.amount_remaining_cents, status = excluded.status, hitpay_invoice_id = excluded.hitpay_invoice_id`,
-      [inv.id, inv.hitpayInvoiceId, inv.stripeInvoiceId, inv.customerId, inv.total, inv.allocated, inv.writtenOff, inv.remaining, inv.status, inv.issuedOn, inv.followUpOn],
+      [inv.id, inv.hitpayInvoiceId, inv.stripeInvoiceId, inv.customerId, inv.total, inv.allocated, inv.writtenOff, inv.remaining, inv.status, inv.issuedOn, inv.followUpOn, inv.dueOn],
     );
   }
   for (const credit of snap.credits.values()) {
@@ -398,7 +399,7 @@ export function persist(db: DatabaseSync, snap: LedgerSnapshot, audits: readonly
       db,
       `INSERT INTO webhook_receipt (id, received_at, event_type, signature_ok, hitpay_request_id, dedupe_key, outcome, raw_body_sha256, source)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET outcome = excluded.outcome, signature_ok = excluded.signature_ok, source = excluded.source`,
+       ON CONFLICT(id) DO UPDATE SET outcome = excluded.outcome, signature_ok = excluded.signature_ok, source = excluded.source, event_type = excluded.event_type, raw_body_sha256 = excluded.raw_body_sha256`,
       [receipt.id, receipt.receivedAt, receipt.eventType, receipt.signatureOk ? 1 : 0, receipt.hitpayRequestId, receipt.dedupeKey, receipt.outcome, receipt.rawBodySha256, receipt.source],
     );
   }
@@ -479,7 +480,7 @@ export function commitWebhook(
   return withTx(db, () => {
     const start = loadSnapshot(db);
     const prior = draft.dedupeKey ? start.receipts.find((row) => row.dedupeKey === draft.dedupeKey && row.signatureOk) : undefined;
-    if (prior && (prior.outcome === "applied" || prior.outcome === "amount_mismatch")) {
+    if (prior && (prior.outcome === "applied" || [...start.credits.values()].some((credit) => credit.source.kind === "hitpay_webhook" && credit.source.receiptId === prior.id) || (prior.outcome === draft.outcome && draft.outcome !== "applied"))) {
       return { ok: true as const, value: { snapshot: start, audit: [], info: {}, replay: true, outcome: prior.outcome } };
     }
     const receiptId = prior ? prior.id : (`RCP-${String(start.seq).padStart(4, "0")}` as ReceiptId);
@@ -568,13 +569,13 @@ export function bootstrap(db: DatabaseSync, actor: HumanActor = { kind: "human",
     snap.aliases.push({ customerId: id as CustomerId, alias, confirmedByHuman: true });
   }
   const invoices = [
-    ["INV-104", "CUS-ABC", 50000, "2026-10-28"],
-    ["INV-105", "CUS-AHS", 50000, "2026-10-30"],
-    ["INV-110", "CUS-AHS", 18000, "2026-11-05"],
-    ["INV-041", "CUS-TBK", 50000, "2026-10-15"],
-    ["INV-042", "CUS-TBK", 30000, "2026-10-15"],
+    ["INV-104", "CUS-ABC", 50000, "2026-10-28", "2026-11-11"],
+    ["INV-105", "CUS-AHS", 50000, "2026-10-30", "2026-11-13"],
+    ["INV-110", "CUS-AHS", 18000, "2026-11-05", "2026-12-05"],
+    ["INV-041", "CUS-TBK", 50000, "2026-10-15", "2026-11-14"],
+    ["INV-042", "CUS-TBK", 30000, "2026-10-15", "2026-11-14"],
   ] as const;
-  for (const [id, customerId, total, issued] of invoices) {
+  for (const [id, customerId, total, issued, due] of invoices) {
     const invoice: Invoice = {
       id: asInvoiceId(id),
       hitpayInvoiceId: null,
@@ -582,6 +583,7 @@ export function bootstrap(db: DatabaseSync, actor: HumanActor = { kind: "human",
       customerId: customerId as CustomerId,
       total: cents(total),
       issuedOn: asIsoDate(issued),
+      dueOn: asIsoDate(due),
       followUpOn: null,
       allocated: cents(0),
       writtenOff: cents(0),

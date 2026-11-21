@@ -1,12 +1,13 @@
 import { createServer } from "node:http";
 import next from "next";
 import { installLocalPolicyContext } from "../src/server/local-request-context";
+import { readLocalPolicyMode } from "../src/server/env";
 
 if (process.env.NODE_ENV === "production")
   throw new Error("The local development launcher cannot run in production.");
 Object.assign(process.env, { NODE_ENV: "development" });
-if (process.argv.includes("--policy-edits"))
-  process.env.TALLY_LOCAL_POLICY_EDITS = "on";
+if (process.argv.includes("--ledger-edits"))
+  process.env.TALLY_LOCAL_LEDGER_EDITS = "on";
 const hostname = "127.0.0.1";
 const port = 43123;
 const context = installLocalPolicyContext();
@@ -50,7 +51,7 @@ async function main() {
   server.on("upgrade", app.getUpgradeHandler());
   server.listen(port, hostname, () =>
     console.log(
-      `Tally local development: http://${hostname}:${port}${process.env.TALLY_LOCAL_POLICY_EDITS === "on" ? " (local policy editing enabled)" : " (policy editing disabled)"}`,
+      `Tally local development: http://${hostname}:${port}${readLocalPolicyMode() ? " (disposable ledger policy editing enabled)" : " (policy editing disabled)"}${process.env.TALLY_LOCAL_LEDGER_EDITS === "on" ? " (supplier actions enabled)" : " (supplier actions locked)"}`,
     ),
   );
 }

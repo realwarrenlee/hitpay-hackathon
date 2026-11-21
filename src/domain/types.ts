@@ -68,6 +68,7 @@ export interface Invoice {
   customerId: CustomerId;
   total: Cents;
   issuedOn: IsoDate;
+  dueOn: IsoDate | null;
   followUpOn: IsoDate | null;
   allocated: Cents;
   writtenOff: Cents;
@@ -241,20 +242,22 @@ export interface ConfirmedPayment {
   source: SettlementSource;
 }
 
-export type WebhookRejection = "bad_signature" | "unparseable" | "unknown_reference" | "not_completed" | "amount_mismatch";
+export type WebhookRejection = "bad_signature" | "unparseable" | "unknown_reference" | "not_completed" | "amount_mismatch" | "identity_mismatch" | "currency_mismatch" | "purpose_mismatch" | "event_mismatch";
 
 export type Hints = { alias: string | null; invoiceTokens: string[] };
 
 export type Command =
+  | { kind: "create_invoice"; input: unknown; by: HumanActor }
+  | { kind: "create_delivery"; input: unknown; by: HumanActor }
   | { kind: "update_policy"; values: Settings; expectedVersion: number; by: PolicyActor }
   | { kind: "import_batch"; batch: ParsedBatch; actor: HumanActor }
   | { kind: "record_suggestions"; creditId: CreditId; result: MatchResult }
   | { kind: "approve"; suggestionId: SuggestionId; pick: InvoiceId | null; by: HumanActor }
-  | { kind: "approve_preselected"; by: HumanActor }
+  | { kind: "approve_preselected"; suggestionIds?: readonly SuggestionId[]; by: HumanActor }
   | { kind: "reject"; suggestionId: SuggestionId; by: HumanActor }
   | { kind: "manual_allocate"; creditId: CreditId; invoiceId: InvoiceId; amount: Cents; by: HumanActor }
   | { kind: "undo"; allocationId: AllocationId; by: HumanActor }
-  | { kind: "commit_approved"; by: HumanActor }
+  | { kind: "commit_approved"; allocationIds?: readonly AllocationId[]; by: HumanActor }
   | { kind: "reverse"; allocationId: AllocationId; by: HumanActor; reason: string }
   | { kind: "write_off"; invoiceId: InvoiceId; amount: Cents; by: Actor; reason: string }
   | { kind: "confirm_alias"; customerId: CustomerId; alias: string; by: HumanActor }
@@ -262,11 +265,11 @@ export type Command =
   | { kind: "create_payment_request"; purpose: PaymentRequestPurpose; by: HumanActor }
   | { kind: "payment_request_created"; id: PaymentRequestId; hitpayRequestId: HitpayRequestId; url: string }
   | { kind: "webhook_confirmed"; event: ConfirmedPayment }
-  | { kind: "webhook_rejected"; receiptId: ReceiptId; why: WebhookRejection }
-  | { kind: "check_cutoff"; customerId: CustomerId | "all"; by: HumanActor | SystemActor }
-  | { kind: "approve_hold"; customerId: CustomerId; by: HumanActor }
-  | { kind: "reject_hold"; customerId: CustomerId; by: HumanActor; reason: string }
-  | { kind: "override_hold"; customerId: CustomerId; by: HumanActor; reason: string }
+  | { kind: "webhook_rejected"; receiptId: ReceiptId; why: WebhookRejection; source?: SettlementSource }
+  | { kind: "check_cutoff"; expectedDeliveryId?: DeliveryId; customerId: CustomerId | "all"; by: HumanActor | SystemActor }
+  | { kind: "approve_hold"; expectedDeliveryId?: DeliveryId; customerId: CustomerId; by: HumanActor }
+  | { kind: "reject_hold"; expectedDeliveryId?: DeliveryId; customerId: CustomerId; by: HumanActor; reason: string }
+  | { kind: "override_hold"; expectedDeliveryId?: DeliveryId; customerId: CustomerId; by: HumanActor; reason: string }
   | { kind: "mark_delivered"; deliveryId: DeliveryId; by: HumanActor };
 
 export type Rejection = {
@@ -280,7 +283,9 @@ export type Rejection = {
     | "wrong_actor"
     | "duplicate"
     | "invalid_policy"
-    | "policy_conflict";
+    | "policy_conflict"
+    | "request_unresolved"
+    | "invalid_input";
   detail: string;
 };
 

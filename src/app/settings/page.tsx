@@ -9,7 +9,7 @@ export const metadata = { title: "Settings" };
 export default function SettingsPage() {
   const env = readEnv();
   return (
-    <Shell today={env.today} mode={env.gateway === "fake" ? "fake" : "sandbox"}>
+    <Shell>
       <PageHeader
         title="Settings"
         description="The policies that guide reconciliation and delivery decisions."

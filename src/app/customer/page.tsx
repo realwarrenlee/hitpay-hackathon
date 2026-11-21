@@ -9,23 +9,27 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
-import { readEnv } from "@/server/env";
 import { getDb, loadSnapshot } from "@/server/ledger";
 import { customerBalances } from "@/server/dashboard";
+import { buttonVariants } from "@/components/ui/button";
+import { plural } from "@/lib/presentation";
 import { formatSgd, sum } from "@/domain/money";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Customers" };
 export default function CustomersPage() {
-  const env = readEnv();
   const snapshot = loadSnapshot(getDb());
   const rows = customerBalances(snapshot);
   return (
-    <Shell today={env.today} mode={env.gateway === "fake" ? "fake" : "sandbox"}>
+    <Shell>
       <PageHeader
         title="Customers"
         description="Keep track of balances and make informed delivery decisions."
+        actions={
+          <Link href="/invoice/new" className={buttonVariants()}>
+            New invoice
+          </Link>
+        }
       />
       <StatTiles
         tiles={[
@@ -38,7 +42,7 @@ export default function CustomersPage() {
           {
             label: "Customers overdue",
             value: String(rows.filter((row) => row.overdue > 0).length),
-            hint: `Of ${rows.length} customers`,
+            hint: `Of ${plural(rows.length, "customer")}`,
             icon: UsersIcon,
           },
           {
@@ -46,7 +50,7 @@ export default function CustomersPage() {
             value: String(
               rows.filter((row) => row.hold === "pay_first").length,
             ),
-            hint: `${rows.filter((row) => row.hold === "proposed").length} proposed holds awaiting approval`,
+            hint: `${plural(rows.filter((row) => row.hold === "proposed").length, "proposed hold")} awaiting approval`,
             icon: ShieldAlertIcon,
           },
         ]}
@@ -54,12 +58,6 @@ export default function CustomersPage() {
       <Card>
         <CardHeader>
           <CardTitle>All customers</CardTitle>
-          <CardDescription>
-            Overdue balances do not automatically place a delivery on hold.{" "}
-            <Link href="/settings" className="underline underline-offset-4">
-              View delivery policy
-            </Link>
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <CustomerTable rows={rows} />

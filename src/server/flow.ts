@@ -1,8 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
-import { addDays, inCandidateWindow } from "@/domain/dates";
+import { addDays } from "@/domain/dates";
 import { match } from "@/domain/match";
 import { cents, formatSgd, type Cents } from "@/domain/money";
-import type { CustomerId, Instant, InvoiceId, SuggestionId } from "@/domain/ids";
+import type { CustomerId, DeliveryId, Instant, InvoiceId, SuggestionId } from "@/domain/ids";
 import type { BankCredit, HumanActor, LedgerSnapshot, StoredSuggestion } from "@/domain/types";
 import { readEnv } from "@/server/env";
 import { parseDbs } from "@/server/import/dbs";
@@ -109,7 +109,6 @@ export async function importBytes(db: DatabaseSync, bytes: Uint8Array, fileName:
     const read = reads[index];
     run(db, { kind: "record_hint", creditId: row.credit.id, hints: read.hints }, now);
     const open = [...snapshot.invoices.values()]
-      .filter((inv) => (inv.remaining as number) > 0 && inCandidateWindow(inv.issuedOn, row.credit.valueDate))
       .map((inv) => ({ id: inv.id, customerId: inv.customerId, remaining: inv.remaining, issuedOn: inv.issuedOn }));
     const result = match({ credit: { amount: row.credit.amount, rawRef: row.credit.rawRef, payerName: row.credit.payerName, valueDate: row.credit.valueDate }, openInvoices: open, confirmedAliases: row.aliases, hints: read.hints });
     run(db, { kind: "record_suggestions", creditId: row.credit.id, result }, now);
@@ -225,13 +224,13 @@ export async function requestRemainder(db: DatabaseSync, gateway: HitPayGateway,
     expiresAt: `${addDays(env.today, 7)} 23:59:59`,
     webhookUrl: `${env.appUrl}/api/hitpay/webhook`,
   });
-  if (!made.ok) return { ok: false as const, error: { code: "not_found" as const, detail: made.error.detail } };
+  if (!made.ok) return { ok: false as const, error: { code: "request_unresolved" as const, detail: "Provider creation is unresolved; inspect the stored reference before retrying." } };
   return run(db, { kind: "payment_request_created", id: String(created.value.info.paymentRequestId) as never, hitpayRequestId: made.value.hitpayRequestId, url: made.value.url }, now);
 }
 
-export async function approveCustomerHold(db: DatabaseSync, gateway: HitPayGateway, customerId: CustomerId, actor: HumanActor = OWNER, now: Instant = readEnv().now) {
+export async function approveCustomerHold(db: DatabaseSync, gateway: HitPayGateway, customerId: CustomerId, actor: HumanActor = OWNER, now: Instant = readEnv().now, expectedDeliveryId?: DeliveryId) {
   const env = readEnv();
-  const created = run(db, { kind: "approve_hold", customerId, by: actor }, now);
+  const created = run(db, { kind: "approve_hold", customerId, by: actor, expectedDeliveryId }, now);
   if (!created.ok) return created;
   const amount = cents(created.value.info.amount as number);
   const referenceNumber = String(created.value.info.referenceNumber) as never;
@@ -242,7 +241,7 @@ export async function approveCustomerHold(db: DatabaseSync, gateway: HitPayGatew
     expiresAt: `${addDays(env.today, 1)} 23:59:59`,
     webhookUrl: `${env.appUrl}/api/hitpay/webhook`,
   });
-  if (!made.ok) return { ok: false as const, error: { code: "not_found" as const, detail: made.error.detail } };
+  if (!made.ok) return { ok: false as const, error: { code: "request_unresolved" as const, detail: "Provider creation is unresolved; inspect the stored reference before retrying." } };
   return run(db, { kind: "payment_request_created", id: String(created.value.info.paymentRequestId) as never, hitpayRequestId: made.value.hitpayRequestId, url: made.value.url }, now);
 }
 

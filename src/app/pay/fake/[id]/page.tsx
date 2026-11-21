@@ -1,3 +1,4 @@
+import { localLedgerAccess } from "@/server/local-ledger-access";
 import { TallyLogo } from "@/components/tally-logo";
 import { simulatePayAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,7 @@ export default async function FakePayPage({
           </p>
           <form action={simulatePayAction}>
             <input type="hidden" name="id" value={id} />
-            <Button type="submit" className="h-12 w-full text-base">
+            <Button type="submit" disabled={!localLedgerAccess() || !request} className="h-12 w-full text-base">
               Confirm simulated payment
             </Button>
           </form>

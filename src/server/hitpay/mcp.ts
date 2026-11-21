@@ -152,6 +152,7 @@ export class McpGateway implements HitPayGateway {
     if (!result.ok) return result;
     const parsed = parsePaymentRequest(result.value);
     if (!parsed.ok) return { ok: false, error: masked(parsed.error, this.connection) };
+    if (parsed.value.amount !== input.amount || parsed.value.currency !== "SGD" || parsed.value.referenceNumber !== input.referenceNumber || parsed.value.purpose !== input.purpose) return { ok: false, error: { code: "unparseable", detail: "Created payment request did not match the intended SGD obligation; inspect provider state before retrying" } };
     if (!parsed.value.url) return { ok: false, error: { code: "unparseable", detail: "payment request had no checkout url" } };
     return {
       ok: true,
@@ -159,11 +160,11 @@ export class McpGateway implements HitPayGateway {
     };
   }
 
-  async getPaymentRequest(id: HitpayRequestId): Promise<Result<{ status: "pending" | "completed" | "other"; amount: Cents; referenceNumber: string }, GatewayError>> {
+  async getPaymentRequest(id: HitpayRequestId): Promise<Result<{ id: HitpayRequestId; currency: string | null; purpose: string | null; status: "pending" | "completed" | "other"; amount: Cents; referenceNumber: string }, GatewayError>> {
     const result = await this.invoke("get_payment_request", { id });
     if (!result.ok) return result;
     const parsed = parsePaymentRequest(result.value);
     if (!parsed.ok) return { ok: false, error: masked(parsed.error, this.connection) };
-    return { ok: true, value: { status: parsed.value.status, amount: parsed.value.amount, referenceNumber: parsed.value.referenceNumber } };
+    return { ok: true, value: { id: parsed.value.id as HitpayRequestId, currency: parsed.value.currency, purpose: parsed.value.purpose, status: parsed.value.status, amount: parsed.value.amount, referenceNumber: parsed.value.referenceNumber } };
   }
 }

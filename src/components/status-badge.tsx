@@ -16,9 +16,9 @@ export function StatusBadge({
   return (
     <Badge
       variant="secondary"
-      className={`gap-1.5 rounded-md px-2 py-1 font-medium ${colors[tone]}`}
+      className={`h-auto min-h-5 max-w-full gap-1.5 rounded-md px-2 py-1 font-medium whitespace-normal ${colors[tone]}`}
     >
-      <span className="size-1.5 rounded-full bg-current" />
+      <span className="size-1.5 shrink-0 rounded-full bg-current" />
       {children}
     </Badge>
   );

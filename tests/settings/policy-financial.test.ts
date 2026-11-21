@@ -32,7 +32,7 @@ function world(
   const s = loadSnapshot(db);
   db.close();
   const invoice = s.invoices.get("INV-104" as never)!;
-  invoice.issuedOn = addDays(s.today, -age);
+  invoice.dueOn = addDays(s.today, -age);
   invoice.total = cents(amount);
   invoice.remaining = cents(amount);
   invoice.followUpOn = asIsoDate("2099-01-01");
@@ -119,14 +119,14 @@ describe("approved overdue hold policy", () => {
   });
 
   test.each([
-    [0, null, 5000, "proposed"],
+    [0, null, 0, "normal"],
     [-1, null, 0, "normal"],
     [1, 1, 0, "normal"],
     [2, 1, 5000, "proposed"],
     [0, 1, 0, "normal"],
     [10, 30, 0, "normal"],
   ] as const)(
-    "issue-age %s and minimum %s agree in display and hold",
+    "days past due %s and grace %s agree in display and hold",
     (age, days, expected, status) => {
       const result = world(age, days);
       expect(result.overdue).toBe(expected);
@@ -145,12 +145,12 @@ describe("approved overdue hold policy", () => {
       world(100, 1, 1000, 3000).after.customers.get("CUS-ABC" as never)?.hold
         .status,
     ).toBe("normal"));
-  test("SGT policy calendar handles leap-day and year boundaries using issue dates", () => {
+  test("SGT policy calendar handles leap-day and year boundaries using due dates", () => {
     const x = world(2, 1);
     expect(x.overdue).toBe(5000);
     const invoice = [...x.s.invoices.values()][0];
     x.s.today = asIsoDate("2024-03-01");
-    invoice.issuedOn = asIsoDate("2024-02-29");
+    invoice.dueOn = asIsoDate("2024-02-29");
     expect(
       overdueBalance(
         [
@@ -169,7 +169,7 @@ describe("approved overdue hold policy", () => {
       ),
     ).toBe(0);
     x.s.today = asIsoDate("2025-01-01");
-    invoice.issuedOn = asIsoDate("2024-12-30");
+    invoice.dueOn = asIsoDate("2024-12-30");
     expect(
       overdueBalance(
         [
@@ -197,7 +197,7 @@ describe("approved overdue hold policy", () => {
         fc.integer({ min: 0, max: 100000 }),
         (age, days, amount, threshold) => {
           const result = world(age, days, amount, threshold);
-          const eligible = age >= 0 && (days === null || age > days);
+          const eligible = age > (days ?? 0);
           expect(result.overdue).toBe(eligible ? amount : 0);
           expect(
             result.after.customers.get("CUS-ABC" as never)?.hold.status,

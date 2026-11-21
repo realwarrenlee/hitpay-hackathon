@@ -11,7 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { readEnv } from "@/server/env";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Import" };
 export default async function ImportPage({
@@ -20,9 +19,8 @@ export default async function ImportPage({
   searchParams: Promise<{ status?: string }>;
 }) {
   const params = await searchParams;
-  const env = readEnv();
   return (
-    <Shell today={env.today} mode={env.gateway === "fake" ? "fake" : "sandbox"}>
+    <Shell>
       <PageHeader
         title="Import transactions"
         description="Bring your DBS bank credits into Tally, ready for review."
@@ -33,7 +31,7 @@ export default async function ImportPage({
           <CardHeader>
             <CardTitle>Upload bank statement</CardTitle>
             <CardDescription>
-              Choose the original CSV exported from DBS.
+              Accepted format: original DBS CSV export.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col">
@@ -48,9 +46,7 @@ export default async function ImportPage({
             <CardContent>
               <ul className="space-y-5">
                 {[
-                  "Accepted format: DBS CSV export",
-                  "Only credits enter the review queue",
-                  "Debits are excluded from reconciliation",
+                  "Only credits enter review; debits are excluded",
                   "Duplicate imports add no new records",
                 ].map((text) => (
                   <li

@@ -19,7 +19,8 @@
     "doctor": "tsx --env-file-if-exists=.env scripts/doctor.ts",
     "ledger:dump": "tsx --env-file-if-exists=.env scripts/ledger-dump.ts",
     "golden:update": "tsx --env-file-if-exists=.env scripts/golden-update.ts",
-    "dev:policy-demo": "tsx --env-file-if-exists=.env scripts/dev-local.ts --policy-edits"
+    "dev:supplier-demo": "tsx --env-file-if-exists=.env scripts/dev-local.ts --ledger-edits",
+    "dev:policy-demo": "tsx --env-file-if-exists=.env scripts/dev-local.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

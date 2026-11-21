@@ -43,9 +43,18 @@ function fresh() {
   opened.push(db);
   return db;
 }
-function allowed<T>(fn: () => T) {
+function allowed<T>(fn: () => T, gateway: "fake" | "mcp" = "fake") {
   vi.stubEnv("NODE_ENV", "development");
-  vi.stubEnv("TALLY_LOCAL_POLICY_EDITS", "on");
+  vi.stubEnv("TALLY_GATEWAY", gateway);
+  vi.stubEnv("TALLY_LOCAL_LEDGER_EDITS", "on");
+  vi.stubEnv("TALLY_DB_URL", ":memory:");
+  vi.stubEnv("TALLY_DEMO_DB_URL", ":memory:");
+  vi.stubEnv("HITPAY_API_KEY", gateway === "mcp" ? "fixture-sandbox-key" : "");
+  vi.stubEnv("HITPAY_WEBHOOK_SALT", gateway === "mcp" ? "fixture-sandbox-salt" : "");
+  vi.stubEnv("HITPAY_ENV", "sandbox");
+  vi.stubEnv("HITPAY_MCP_URL", "");
+  vi.stubEnv("PUBLIC_URL", "");
+  vi.stubEnv("TALLY_LOCAL_POLICY_EDITS", undefined);
   return installLocalPolicyContext().run(request, fn);
 }
 afterEach(() => {
@@ -62,11 +71,11 @@ afterEach(() => {
   }
 });
 describe("policy ledger and service", () => {
-  test("atomically persists exact values, version and explicit local actor audit", () => {
+  test.each(["fake", "mcp"] as const)("%s atomically persists exact values, version and explicit local actor audit", (gateway) => {
     const db = fresh();
     vi.spyOn(ledger, "getDb").mockReturnValue(db);
     const before = ledger.loadSnapshot(db);
-    expect(allowed(() => savePolicy(payload))).toMatchObject({
+    expect(allowed(() => savePolicy(payload), gateway)).toMatchObject({
       ok: true,
       policy: { threshold: "50.01", minimumDays: 7, version: 1 },
     });
@@ -84,6 +93,12 @@ describe("policy ledger and service", () => {
       },
     });
     expect(after.audit.at(-1)?.at).toBeTruthy();
+    expect(after.invoices).toEqual(before.invoices);
+    expect(after.credits).toEqual(before.credits);
+    expect(after.allocations).toEqual(before.allocations);
+    expect(after.deliveries).toEqual(before.deliveries);
+    expect(after.customers).toEqual(before.customers);
+    expect(after.paymentRequests).toEqual(before.paymentRequests);
   });
   test("two clients at one version cannot silently overwrite each other", () => {
     const db = fresh();
@@ -144,7 +159,24 @@ describe("policy ledger and service", () => {
     });
     expect(get).not.toHaveBeenCalled();
   });
-  test("invalid payload and forged auto-approval/actor fields cannot mutate", () => {
+  test.each([
+    ["TALLY_GATEWAY", "invalid"],
+    ["HITPAY_ENV", "live"],
+    ["HITPAY_MCP_URL", "https://mcp.hit-pay.com/mcp"],
+    ["TALLY_LOCAL_LEDGER_EDITS", "off"],
+    ["NODE_ENV", "production"],
+    ["TALLY_DB_URL", "file:./data/tally.db"],
+    ["TALLY_DEMO_DB_URL", ""],
+  ])("denies %s=%s before database access despite inherited opt-in", (key, value) => {
+    const get = vi.spyOn(ledger, "getDb");
+    expect(allowed(() => {
+      vi.stubEnv(key, value);
+      vi.stubEnv("TALLY_LOCAL_POLICY_EDITS", "on");
+      return savePolicy(payload);
+    }, "mcp")).toMatchObject({ ok: false, code: "access_denied" });
+    expect(get).not.toHaveBeenCalled();
+  });
+  test.each(["fake", "mcp"] as const)("%s invalid payload and forged auto-approval/actor fields cannot mutate", (gateway) => {
     const db = fresh();
     vi.spyOn(ledger, "getDb").mockReturnValue(db);
     const before = ledger.loadSnapshot(db);
@@ -154,17 +186,17 @@ describe("policy ledger and service", () => {
       { ...payload, autoApproveRemainder: false },
       { ...payload, by: actor },
     ])
-      expect(allowed(() => savePolicy(input)).ok).toBe(false);
+      expect(allowed(() => savePolicy(input), gateway).ok).toBe(false);
     expect(ledger.loadSnapshot(db)).toEqual(before);
   });
-  test("failure writing audit rolls back values and records no success", () => {
+  test.each(["fake", "mcp"] as const)("%s failure writing audit rolls back values and records no success", (gateway) => {
     const db = fresh();
     vi.spyOn(ledger, "getDb").mockReturnValue(db);
     const before = ledger.loadSnapshot(db);
     db.exec(
       "CREATE TRIGGER reject_policy_audit BEFORE INSERT ON audit_event WHEN NEW.action = 'policy_updated' BEGIN SELECT RAISE(ABORT,'test storage failure'); END",
     );
-    expect(allowed(() => savePolicy(payload))).toMatchObject({
+    expect(allowed(() => savePolicy(payload), gateway)).toMatchObject({
       ok: false,
       code: "save_failed",
     });

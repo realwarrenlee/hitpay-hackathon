@@ -43,9 +43,11 @@ The `@/*` alias resolves to `src/*` in TypeScript and Vitest. Screens do not wri
 
 [`run`](../src/server/ledger.ts) begins an immediate SQLite transaction, loads a snapshot, calls the pure [`decide`](../src/domain/decide.ts), applies its follow-up commands and persists the resulting state, projections and audit together. Rejections roll back; storage failures throw and roll back. Domain functions receive policy date/time explicitly from the snapshot or caller.
 
-Gateway calls happen outside these database transactions. Creating a request first commits a local `creating` row, calls the gateway, then records the returned ID/URL as `pending`. A failed gateway call can leave a `creating` row; recovery is a [known limitation](verification.md#known-limitations).
+Gateway calls happen outside these database transactions. Creating a request first commits a local `creating` row, calls the gateway, then records the returned ID/URL as `pending`. A failed gateway call can leave a `creating` row. It blocks duplicate creation for that obligation and is displayed with its reference; safe provider reconciliation remains a [known limitation](verification.md#known-limitations).
 
-[`commitWebhook`](../src/server/ledger.ts) persists a receipt and its settlement changes atomically. Successfully applied or amount-mismatch receipts deduplicate by HitPay request ID across webhook and polling paths. Earlier nonterminal outcomes may be retried. Replay protection prevents a second ledger effect; the webhook handler can still make a remote confirmation call before deduplication.
+[`commitWebhook`](../src/server/ledger.ts) persists a receipt and its settlement changes atomically. Applied settlements and receipts that created review credits deduplicate by HitPay request ID across webhook and polling paths. Identical rejection evidence deduplicates; corrected confirmations and earlier nonterminal outcomes may be retried. Replay protection prevents a second ledger effect; the webhook handler can still make a remote confirmation call before deduplication.
+
+Invoice and delivery creation run through `create_invoice`/`create_delivery`, with server/domain validation and atomic creation/audit. Invoice references follow `INV-` plus 3–6 digits; delivery references follow `DLV-` plus 3–9 digits. Identical repeated input returns the existing record; conflicting facts for an existing reference reject without writes. New records are inserted into the existing tables without a schema migration. Delivery creation does not queue policy evaluation or gateway calls. Detail decisions carry an expected delivery ID checked inside the ledger transaction, preventing stale forms from deciding a different hold. Explicit human evaluation is audited, and new proposal evidence includes policy date/version/settings.
 
 The ledger also owns `hint_cache` writes. These are presentation cache updates, not financial commands or independently audited money transitions.
 
@@ -60,7 +62,7 @@ The ledger also owns `hint_cache` writes. These are presentation cache updates, 
 | `audit_event` | Actor, timestamp, entity/action, before/after and evidence |
 | `hint_cache`, `meta` | Cached reference insights and sequence state |
 
-The [schema](../src/server/db.ts) has conservation/nonnegative constraints on invoice projections, positive allocations, unique payment references/HitPay IDs and unique credit dedupe keys. Triggers reject updates/deletes to `audit_event`. Additive initialization supports the policy-version and receipt-source columns and hint cache. These checks complement domain validation; they do not prove the entire business history is valid.
+The [schema](../src/server/db.ts) has conservation/nonnegative constraints on invoice projections, positive allocations, unique payment references/HitPay IDs and unique credit dedupe keys. Triggers reject updates/deletes to `audit_event`. Additive initialization supports nullable `invoice.due_on`, policy-version and receipt-source columns and hint cache. Existing invoices migrate with unknown due dates, preserving historical financial data and audit. These checks complement domain validation; they do not prove the entire business history is valid.
 
 ## Database selection and initialization
 
@@ -75,6 +77,8 @@ Runtime data stays in ignored `data/`; representative inputs stay in `fixtures/`
 | Route | Purpose |
 | --- | --- |
 | `/`, `/import`, `/review` | Overview, DBS upload and match review |
+| `/deliveries`, `/deliveries/[id]` | Policy-date delivery queue and supplier decision/evidence screen |
+| `/invoice/new`, `/deliveries/new` | Guarded invoice/delivery entry for existing customers |
 | `/customer`, `/customer/[id]`, `/invoice/[id]` | Balances, delivery decisions and invoice collection |
 | `/settings`, `/audit` | Numeric overdue policy and recorded activity |
 | `/driver/[deliveryId]`, `/pay/fake/[id]` | Driver status/checkout and explicitly simulated payment |
@@ -86,4 +90,4 @@ Runtime data stays in ignored `data/`; representative inputs stay in `fixtures/`
 
 The driver refreshes local delivery status every two seconds and checks a linked payment with the gateway every five seconds until a terminal outcome. A manual status button is also available. Payment polling is a mutation path, not merely a local read.
 
-The custom [`dev-local.ts`](../scripts/dev-local.ts) launcher binds `127.0.0.1:43123`, rejects foreign Host and forwarded/proxy headers, and records socket context with AsyncLocalStorage. That context gates the local Settings editor. Other business actions use static human audit attribution; this is not an authentication system. Settings behavior and access requirements are defined in [features](features.md#settings).
+Normal `npm run dev` uses the custom [`dev-local.ts`](../scripts/dev-local.ts) launcher, binding `127.0.0.1:43123`, rejecting foreign Host and forwarded/proxy headers, and recording socket context with AsyncLocalStorage. These request guards are unchanged. Settings, [supplier mutations](features.md#supplier-entry-and-access), fake simulation and payment-poll/hints POST routes require development mode and exact `TALLY_LOCAL_LEDGER_EDITS=on` (also enabled by `npm run dev:supplier-demo`), trusted loopback local/peer sockets and same-origin POST. Settings additionally requires the [declared disposable-ledger gate](features.md#settings), explicit sandbox environment and explicit fake or MCP mode; sandbox credentials and `PUBLIC_URL` do not lock Settings or grant network access. `dev:policy-demo` is only an ordinary-dev compatibility alias, not an opt-in or bypass. Plain Next.js does not supply the trusted context. Keep this unauthenticated server on loopback, without proxying or tunnelling. Signed remote webhooks retain their own raw-signature/remote-confirmation boundary. Static human audit attribution is not authentication.

@@ -3,6 +3,7 @@ import { cents, formatSgd } from "@/domain/money";
 const State = z.object({
   overdueBalanceThreshold: z.number().int().nonnegative(),
   overdueDaysThreshold: z.number().int().nullable(),
+  basis: z.literal("due_date").optional(),
   version: z.number().int().nonnegative(),
 });
 export function PolicyAuditDetails({
@@ -27,10 +28,10 @@ export function PolicyAuditDetails({
         </dd>
       </div>
       <div>
-        <dt className="text-muted-foreground">Minimum overdue age</dt>
+        <dt className="text-muted-foreground">{newPolicy.data.basis === "due_date" ? "Grace days after due date" : "Historical invoice issue-age policy"}</dt>
         <dd>
-          {age(oldPolicy.data.overdueDaysThreshold)} →{" "}
-          {age(newPolicy.data.overdueDaysThreshold)}
+          {oldPolicy.data.basis === "due_date" ? oldPolicy.data.overdueDaysThreshold ?? "None" : age(oldPolicy.data.overdueDaysThreshold)} →{" "}
+          {newPolicy.data.basis === "due_date" ? newPolicy.data.overdueDaysThreshold ?? "None" : age(newPolicy.data.overdueDaysThreshold)}
         </dd>
       </div>
       <div>

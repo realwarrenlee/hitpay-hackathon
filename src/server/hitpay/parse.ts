@@ -84,12 +84,16 @@ const PaymentRequestSchema = z
     amount: MoneyInput,
     status: z.string().min(1),
     reference_number: z.string().min(1),
+    currency: z.string().optional(),
+    purpose: z.string().optional(),
     url: z.string().min(1).optional(),
     checkout_url: z.string().min(1).optional(),
   })
   .passthrough();
 
 export interface ParsedPaymentRequest {
+  currency: string | null;
+  purpose: string | null;
   id: string;
   amount: Cents;
   status: "pending" | "completed" | "other";
@@ -108,6 +112,8 @@ export function parsePaymentRequest(payload: unknown): Result<ParsedPaymentReque
     ok: true,
     value: {
       id: parsed.data.id,
+      currency: parsed.data.currency?.toUpperCase() ?? (typeof parsed.data.amount === "string" ? CURRENCY_AMOUNT.exec(parsed.data.amount.trim())?.[1] ?? null : null),
+      purpose: parsed.data.purpose ?? null,
       amount: amount.value,
       status: paymentStatus(parsed.data.status),
       referenceNumber: parsed.data.reference_number,

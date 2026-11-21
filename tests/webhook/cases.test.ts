@@ -91,8 +91,9 @@ test("an unknown reference is recorded and changes no invoice", async () => {
   expect(loadSnapshot(db).invoices.get("INV-104" as InvoiceId)?.status).toBe("partially_paid");
 });
 
-test("an amount mismatch stays suggested", async () => {
+test("a signed amount mismatch is rejected without creating a suggested allocation", async () => {
   const { db, gateway, request } = await ready();
+  const before = loadSnapshot(db);
   const body = JSON.stringify({ event_type: "payment_request.completed", payment_request_id: request.hitpayRequestId, reference_number: "TALLY-INV-104-1", amount: "38.00", status: "completed" });
   const { raw, signature } = signed(body);
   const result = await handleWebhook(db, raw, new Headers({ "hitpay-signature": signature }), gateway, NOW);
@@ -100,7 +101,9 @@ test("an amount mismatch stays suggested", async () => {
   expect(result.body.outcome).toBe("amount_mismatch");
   const snap = loadSnapshot(db);
   expect(snap.invoices.get("INV-104" as InvoiceId)?.status).toBe("partially_paid");
-  expect([...snap.allocations.values()].some((row) => row.state === "suggested" && row.amount === 3800)).toBe(true);
+  expect(snap.allocations).toEqual(before.allocations);
+  expect(snap.credits).toEqual(before.credits);
+  expect(snap.deliveries).toEqual(before.deliveries);
 });
 
 test("a remainder during a pay-first hold does not lift the hold", async () => {

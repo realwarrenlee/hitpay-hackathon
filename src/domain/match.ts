@@ -2,6 +2,7 @@ import { cents, sub, type Cents } from "@/domain/money";
 import { formatSgd } from "@/domain/money";
 import type { CustomerId, InvoiceId, IsoDate } from "@/domain/ids";
 import type { Hints, MatchResult, SuggestionBody } from "@/domain/types";
+import { daysBetween, inCandidateWindow } from "@/domain/dates";
 import { explainSuggestion } from "@/domain/reason";
 
 export interface OpenInvoice {
@@ -72,12 +73,21 @@ function finish(input: MatchInput, suggestion: SuggestionBody, invoiceRemaining:
 }
 
 export function match(input: MatchInput): MatchResult {
-  const open = input.openInvoices.filter((row) => (row.remaining as number) > 0);
+  const literalTokens = input.openInvoices.filter((row) => containsAlias(input.credit.rawRef, row.id)).map((row) => row.id);
+  const oldReferenced = input.openInvoices.filter((row) => daysBetween(row.issuedOn, input.credit.valueDate) > 60 && literalTokens.includes(row.id));
+  const identities = new Set(input.confirmedAliases.filter((row) => [input.credit.rawRef, input.credit.payerName].some((text) => containsAlias(text, row.alias))).map((row) => row.customerId));
+  if (oldReferenced.length && (literalTokens.length !== 1 || identities.size > 1 || (identities.size === 1 && !identities.has(oldReferenced[0].customerId)))) {
+    return { kind: "unmatched", reason: "Older invoice reference is ambiguous or conflicts with the confirmed payer; review manually." };
+  }
+  const open = input.openInvoices.filter((row) => (row.remaining as number) > 0 &&
+    (inCandidateWindow(row.issuedOn, input.credit.valueDate) ||
+      (daysBetween(row.issuedOn, input.credit.valueDate) > 60 && literalTokens.length === 1 && literalTokens.includes(row.id))));
   const tokenInvoices: OpenInvoice[] = [];
   for (const token of input.hints.invoiceTokens) {
     const found = open.find((row) => row.id === token);
     if (found && !tokenInvoices.some((row) => row.id === found.id)) tokenInvoices.push(found);
   }
+  if (literalTokens.length && tokenInvoices.length === 0) return { kind: "unmatched", reason: "Referenced invoice is paid or outside the eligible payment dates." };
   const customer = findCustomer(input);
   const amount = input.credit.amount;
 
