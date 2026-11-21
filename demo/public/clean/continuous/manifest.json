@@ -1,0 +1,50 @@
+{
+  "capturedAt": "2026-11-20T14:29:49.739Z",
+  "sourceRun": "C:\\Users\\Warren\\Downloads\\hitpay hackathon\\artifacts\\demo-continuous-20261120-2216",
+  "clips": {
+    "clean/continuous/01-reconciliation.webm": {
+      "seconds": 39.72,
+      "width": 1920,
+      "height": 1080,
+      "editIn": 2.439,
+      "errors": []
+    },
+    "clean/continuous/03-decision.webm": {
+      "seconds": 34.4,
+      "width": 1920,
+      "height": 1080,
+      "editIn": 5.178,
+      "errors": []
+    },
+    "clean/continuous/04-payment.webm": {
+      "seconds": 37.4,
+      "width": 1920,
+      "height": 1080,
+      "editIn": 3.943,
+      "errors": [
+        "WebSocket is already in CLOSING or CLOSED state."
+      ]
+    },
+    "clean/continuous/05-release.webm": {
+      "seconds": 41.68,
+      "width": 1920,
+      "height": 1080,
+      "editIn": 1.474,
+      "errors": []
+    },
+    "clean/continuous/06-driver.webm": {
+      "seconds": 23.08,
+      "width": 430,
+      "height": 860,
+      "editIn": 1.904,
+      "errors": []
+    },
+    "clean/continuous/07-audit.webm": {
+      "seconds": 17.04,
+      "width": 1920,
+      "height": 1080,
+      "editIn": 2.61,
+      "errors": []
+    }
+  }
+}

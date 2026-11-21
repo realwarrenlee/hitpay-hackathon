@@ -1,0 +1,38 @@
+0:00.42–0:05.98  article
+Some Singapore food suppliers have waited up to four months to get paid. That's a real problem.
+
+0:06.62–0:12.76  policy
+One supplier's answer: no payment, no delivery. But someone still has to figure out who paid what.
+
+0:13.32–0:19.92  bridge
+That's why we built Tally. Let me show you a real workflow, using a fictional customer called Tan BK Café.
+
+0:20.52–0:29.28  import
+Here's a bank statement. One eight-hundred-dollar transfer needs to settle two invoices. Tally brings it into a review queue, so we can see where the money should go.
+
+0:29.92–0:41.76  allocation
+Tally suggests five hundred dollars for one invoice, three hundred for the other. It doesn't apply that allocation until I approve it. I review the evidence, approve the split, and now both invoices are settled.
+
+0:42.92–0:55.02  debt
+But here's the catch. There's still thirty-eight dollars and forty cents outstanding on Tan BK Café's other invoice. And they've got a new two-hundred-and-twenty-dollar delivery going out tomorrow. Would you release that order?
+
+0:55.62–1:04.34  decision
+Our demo policy flags overdue balances above thirty dollars. Tally recommends pay-first for this delivery. I review the evidence, then approve.
+
+1:04.92–1:14.96  checkout
+That approval creates a payment request for this new delivery through HitPay's MCP integration. This is HitPay's actual hosted sandbox checkout, for two hundred and twenty dollars.
+
+1:16.12–1:31.08  simulator
+I'll use PayNow. The QR opens HitPay's own sandbox simulator. I complete the test payment here, and there it is: payment successful. The money is simulated, but the checkout, payment record and confirmation come directly from HitPay's sandbox.
+
+1:32.62–1:46.00  confirm
+Here's the important part: even though HitPay says successful, the delivery is still held. I click Check payment status. Tally verifies the provider record against this specific request. Only then does it release the order.
+
+1:47.62–1:59.58  payoff
+Now the driver sees Released. But that older invoice? It still has thirty-eight dollars and forty cents outstanding. The customer paid for the new delivery, not the previous debt. Tally keeps them separate.
+
+2:01.22–2:11.24  audit
+Every approval and release is recorded. We checked the payment twice and restarted Tally: one receipt, the same released delivery, and the old debt still outstanding.
+
+2:11.92–2:18.52  close
+That's Tally. It connects the money you've actually received to the decision you need to make: can this delivery go out?
