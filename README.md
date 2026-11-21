@@ -86,3 +86,7 @@ npm run e2e
 | Coding-agent guardrails | [AGENTS.md](AGENTS.md) |
 
 `src/app/` holds routes; `src/components/` UI; `src/domain/` pure financial rules; `src/server/` persistence and integrations. Tests and fictional inputs live in `tests/` and `fixtures/`; operations in `scripts/`. Private runtime data is under `data/`. Generated logs/dumps in `artifacts/` and optional screenshots/reports in `evidence/` are ignored by Git.
+
+## License
+
+Original project code and documentation are licensed under the [MIT License](LICENSE). Third-party dependencies, article screenshots, music and other third-party media retain their respective licenses and are excluded from this grant. See the [demo notes](demo/README.md) for media provenance and the unverified music publication license.
