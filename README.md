@@ -89,4 +89,4 @@ npm run e2e
 
 ## License
 
-Original project code and documentation are licensed under the [MIT License](LICENSE). Third-party dependencies, article screenshots, music and other third-party media retain their respective licenses and are excluded from this grant. See the [demo notes](demo/README.md) for media provenance and the unverified music publication license.
+Original project code and documentation are licensed under the [MIT License](LICENSE). Third-party dependencies, article screenshots, music and other third-party media retain their respective licenses and are excluded from this grant. See the [demo asset notes](demo/assets/README.md) for media provenance and the unverified music publication license.
